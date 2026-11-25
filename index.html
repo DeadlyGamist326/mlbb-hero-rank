@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLBB Hero Rank Collector</title>
+<style>
+  :root { --bg:#0f1320; --card:#181d30; --line:#2a3150; --text:#e8ecf8; --muted:#8c96b8; --accent:#4d8dff; --on:#1f9d63; --off:#c0392b; }
+  * { box-sizing: border-box; }
+  [hidden] { display:none !important; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,Segoe UI,sans-serif; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin-bottom:16px; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px; }
+  select,input,button { background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:7px 10px; font:inherit; }
+  button { cursor:pointer; } button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  button.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  #status { color:var(--muted); margin-left:auto; }
+  .wrap { overflow-x:auto; border:1px solid var(--line); border-radius:8px; }
+  table { border-collapse:collapse; width:100%; min-width:520px; }
+  th,td { padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th { background:var(--card); position:sticky; top:0; cursor:pointer; user-select:none; color:var(--muted); font-weight:600; }
+  th.sorted { color:var(--accent); }
+  #rows td:nth-child(1), #head th:nth-child(1) { text-align:center; width:48px; }
+  #rows td:nth-child(2), #head th:nth-child(2) { text-align:left; }
+  #rows td { vertical-align:middle; }
+  td.hero .hw { display:flex; align-items:center; gap:10px; }
+  td.hero img { width:32px; height:32px; border-radius:50%; background:var(--line); }
+  td.ctr { text-align:left; white-space:normal; min-width:240px; max-width:420px; }
+  td.ctr .c { position:relative; display:inline-block; margin:2px 4px 2px 0; }
+  td.ctr img { width:28px; height:28px; border-radius:50%; vertical-align:middle; background:var(--line); }
+  td.ctr .n { position:absolute; right:-4px; bottom:-2px; background:var(--accent); color:#fff; font-size:10px; border-radius:8px; padding:0 4px; line-height:14px; }
+  .err { color:#ff6b6b; margin:12px 0; }
+
+  .role { display:inline-block; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:700; color:#101420; letter-spacing:.3px; }
+  .r-JUNGLE { background:#b57edc; } .r-ROAM { background:#4aa8e8; } .r-EXP { background:#f08a3c; }
+  .r-MID { background:#ee6aa7; } .r-GOLD { background:#f2cc2e; }
+  .pos .role { opacity:.55; font-size:10px; padding:0 6px; margin-left:3px; }
+  td.rolec { text-align:left; }
+  #head th:nth-child(3), #head th:nth-child(4), #head th:nth-child(n+8) { text-align:left; }
+  #tip { position:fixed; z-index:50; pointer-events:none; background:#10142a; border:1px solid var(--line); border-radius:8px; padding:10px 12px; box-shadow:0 8px 24px #0009; display:none; max-width:300px; }
+  #tip .th { font-size:14px; margin-bottom:4px; display:flex; align-items:center; gap:8px; }
+  #tip .pos { margin-bottom:4px; display:flex; align-items:center; gap:3px; } #tip .pos .role { margin-left:0; margin-right:0; opacity:1; font-size:11px; padding:1px 8px; }
+  #tip .pos .lbl { color:var(--muted); font-size:11px; width:62px; }
+  #tip .bst { color:var(--muted); font-size:12px; margin-bottom:6px; }
+  #tip .cap { color:var(--muted); font-size:11px; margin:6px 0 3px; }
+  #tip table { min-width:0; width:auto; border-collapse:separate; border-spacing:2px; }
+  #tip th, #tip td { padding:0; border:0; font-size:10px; color:var(--muted); text-align:center; position:static; background:transparent; }
+  #tip th { font-weight:600; padding:0 2px; } #tip td.rl { text-align:right; padding-right:4px; }
+  #tip td.m { width:26px; height:16px; border-radius:3px; }
+  #tip td.m.y { background:var(--on); } #tip td.m.n { background:var(--off); } #tip td.m.u { background:#3a4060; }
+
+  #multi { margin-bottom:16px; }
+  #multi h2 { font-size:15px; margin:0 0 8px; }
+  #grid { width:auto; min-width:0; border:1px solid var(--line); border-radius:8px; border-collapse:separate; border-spacing:4px; }
+  #grid th { position:static; cursor:pointer; text-align:center; background:transparent; border:0; padding:6px 10px; }
+  #grid th:hover { color:var(--accent); }
+  #grid td { padding:0; border:0; }
+  #grid td button { width:100%; min-width:84px; border:0; color:#fff; padding:9px 6px; font-weight:600; }
+  #grid td button { touch-action:none; user-select:none; }
+  #grid td button.boxed { outline:2px solid #fff; outline-offset:-2px; }
+  #grid td button.on { background:var(--on); }
+  #grid td button.off { background:var(--off); }
+  .legend { color:var(--muted); font-size:12px; margin:6px 0 12px; }
+
+  /* nothing should pop in or out suddenly: the toggle table folds/unfolds smoothly, panels fade in */
+  #gridBody { display:grid; grid-template-rows:1fr; opacity:1; transition:grid-template-rows .7s cubic-bezier(.22,.7,.2,1), opacity .5s ease; }
+  #gridBody > .gb-in { overflow:hidden; min-height:0; transition:transform .7s cubic-bezier(.22,.7,.2,1); }
+  #gridBody.collapsed > .gb-in { transform:translateY(-12px); }   /* slides up as it folds, slides down as it opens */
+  #gridBody.collapsed { grid-template-rows:0fr; opacity:0; }
+  #gridBar { height:3px; margin:0 0 8px; border-radius:2px; overflow:hidden; }
+  #gridBar i { display:block; height:100%; background:var(--accent); transform-origin:left; transform:scaleX(0); }
+  #gridBar.run i { animation:gridCountdown 2s linear forwards; }
+  @keyframes gridCountdown { from { transform:scaleX(1); } to { transform:scaleX(0); } }
+  .hint { color:var(--muted); font-size:12px; }
+  @keyframes panelIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+  #multi:not([hidden]), #drafter:not([hidden]), #tableWrap:not([hidden]), #singleBar:not([hidden]) { animation:panelIn .3s ease; }
+  .dcard { animation:panelIn .25s ease; }
+  /* press feedback: buttons dip a little and glow; toggled cells glow green (ON) or red (OFF) */
+  button { transition:transform .12s ease, background .25s ease, border-color .25s ease; }
+  button:active { transform:scale(.96); }
+  @keyframes pulseBlue { from { box-shadow:0 0 0 0 rgba(77,141,255,.85); } to { box-shadow:0 0 0 14px rgba(77,141,255,0); } }
+  @keyframes pulseOn { from { box-shadow:0 0 0 0 rgba(62,207,142,.9); } to { box-shadow:0 0 0 12px rgba(62,207,142,0); } }
+  @keyframes pulseOff { from { box-shadow:0 0 0 0 rgba(255,107,107,.9); } to { box-shadow:0 0 0 12px rgba(255,107,107,0); } }
+  button.pulse { animation:pulseBlue .7s ease-out; }
+  #grid td button.pulse.on { animation:pulseOn .7s ease-out; }
+  #grid td button.pulse.off { animation:pulseOff .7s ease-out; }
+  @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
+
+  .dsec { font-size:15px; margin:16px 0 6px; }
+  .chip { display:inline-flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:16px; padding:3px 8px 3px 4px; }
+  .chip img { width:24px; height:24px; border-radius:50%; }
+  .chip .x { cursor:pointer; color:var(--muted); margin-left:2px; } .chip .x:hover { color:#fff; }
+  .w { display:inline-flex; align-items:center; gap:4px; border-radius:6px; padding:2px 6px 2px 2px; margin:2px 4px 2px 0; font-size:11px; color:#fff; }
+  .w img { width:22px; height:22px; border-radius:50%; }
+  .w i { font-style:normal; }
+  .w.good { background:var(--on); } .w.bad { background:var(--off); } .w.none { background:#3a4060; color:var(--muted); }
+  .dtable td.hero { text-align:left; }
+  .why-t { color:var(--muted); font-size:11px; white-space:normal; max-width:260px; }
+  .dtable th { cursor:default; }
+  /* sticky header: the wrapper must not be a scroll container, or the header stops following the page */
+  #tableWrap { overflow:visible; }
+  /* the whole two-row header is ONE sticky block, so its rows can never drift apart or sink under the body */
+  #tableWrap thead { position:sticky; top:var(--tb, 0px); z-index:5; }   /* sits right under the sticky tab bar */
+  /* the tab buttons (Higher / Lower Winrate ...) stay at the very top while scrolling, so they can be switched any time */
+  #topBar { position:sticky; top:0; z-index:30; background:var(--bg); margin:0 -16px 8px; padding:8px 16px 0; box-shadow:0 8px 10px -9px #000; }
+  #topBar .bar { margin-bottom:8px; }
+  #subBar:not([hidden]) { animation:panelIn .3s ease; }
+  #tableWrap thead th { position:static; background:var(--card); box-shadow:0 1px 0 var(--line); }
+  /* pinned row on top of the header: a copy of the hovered hero's row, fading in and out */
+  /* the window fits 2.5 rows of hero icons (32px per row = 80px); the half row hints that more is scrolling in */
+  #pinRow td { background:#18264a; height:89px; padding:4px 10px; vertical-align:middle; border-bottom:1px solid var(--accent); }
+  #pinRow td:nth-child(1) { text-align:center; } #pinRow td:nth-child(2), #pinRow td.rolec { text-align:left; }
+  #pinRow td.ctr { white-space:normal; }
+  #pinRow .pinc { opacity:0; transition:opacity .18s ease; max-height:80px; overflow:hidden; }
+  #pinRow.show .pinc { opacity:1; }
+  /* click an icon -> jump to that hero's row (lands under the sticky header and flashes) */
+  #rows tr { scroll-margin-top: calc(var(--th, 140px) + var(--tb, 0px) + 6px); }
+  #rows tr.flash td { animation: rowflash 1.6s ease-out; }
+  @keyframes rowflash { 0%, 55% { background:#27406f; } 100% { background:transparent; } }
+  td.ctr .c, #pinRow td.ctr .c { cursor:pointer; }
+  td.ctr.rcell { min-width:96px; max-width:130px; border-left:1px solid var(--line); }
+  #head2 th.rh { cursor:default; text-align:center; border-left:1px solid var(--line); }
+  #head th#ctrHead { text-align:center; }
+  .slot { min-width:130px; height:36px; }
+  .slot.empty { display:inline-flex; align-items:center; justify-content:center; border:1px dashed var(--line); border-radius:16px; color:var(--muted); font-size:12px; padding:0 12px; }
+  .slot.chip { cursor:default; }
+  #tip.wide { width:680px; max-width:94vw; }
+  #tip .tscroll { max-height:32vh; overflow:hidden; }
+  #tip .tcols { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:6px; }
+  #tip .trh { display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; }
+  #tip .trh .role { font-size:9px; padding:0 6px; } #tip .trh i { font-style:normal; font-size:9px; color:var(--muted); }
+  #tip .ti { display:flex; align-items:center; gap:4px; padding:2px 4px 2px 2px; margin-bottom:2px; border-radius:6px; border-left:3px solid transparent; }
+  #tip .ti.good { background:rgba(31,157,99,.22); border-left-color:var(--on); }
+  #tip .ti.bad { background:rgba(192,57,43,.25); border-left-color:var(--off); }
+  #tip .ti img { width:24px; height:24px; border-radius:50%; flex:0 0 24px; background:var(--line); }
+  #tip .ti span { min-width:0; line-height:1.15; }
+  #tip .ti b { display:block; font-size:10px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #tip .ti em { display:block; font-style:normal; font-size:9px; opacity:.8; white-space:nowrap; }
+  #tip .tnone { color:var(--muted); text-align:center; font-size:10px; }
+  #tip .w { margin:2px 3px 2px 0; } #tip .w .nn { opacity:.7; }
+
+  .board { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:10px; align-items:start; }
+  @media (max-width:1100px) { .board { grid-template-columns:repeat(3, minmax(0, 1fr)); } }
+  @media (max-width:700px) { .board { grid-template-columns:repeat(2, minmax(0, 1fr)); } }
+  .rcol { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:8px; min-width:0; }
+  .rhead { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .rhead span { color:var(--muted); font-size:12px; }
+  .rempty { color:var(--muted); text-align:center; padding:6px; }
+  .dcard { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 8px; margin-bottom:6px; }
+  .dtop { display:flex; align-items:center; gap:6px; }
+  .dtop img { width:28px; height:28px; border-radius:50%; background:var(--line); }
+  .dtop b { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600; }
+  .dcnt { color:var(--muted); font-size:11px; }
+  .dtot { font-weight:700; font-size:12px; } .dtot.good { color:#3ecf8e; } .dtot.bad { color:#ff6b6b; }
+  .dchips { margin-top:4px; }
+  .dcard .why-t { max-width:none; }
+</style>
+</head>
+<body>
+<h1>MLBB Hero Rank Collector</h1>
+<div class="sub">Pulls live hero stats from the same API that powers mobilelegends.com/rank.</div>
+
+<div id="topBar">
+  <div class="bar">
+    <button class="tab active" data-m="strong">Higher Winrate against</button>
+    <button class="tab" data-m="weak">Lower Winrate Against</button>
+    <button class="tab" data-m="multi">Multi toggle</button>
+    <button class="tab" data-m="drafter">Drafter</button>
+  </div>
+  <div class="bar" id="subBar">
+    <span class="hint">Ipakita:</span>
+    <button class="sub-tab active" data-s="strong">Higher Winrate against</button>
+    <button class="sub-tab" data-s="weak">Lower Winrate Against</button>
+  </div>
+</div>
+
+<div id="multi" hidden>
+  <div class="bar" style="margin-bottom:6px">
+    <h2 style="margin:0">Pumili ng period at rank</h2>
+    <button id="gridToggle" hidden></button>
+    <span id="gridHint" class="hint"></span>
+  </div>
+  <div id="gridBar"><i></i></div>
+  <div id="gridBody"><div class="gb-in">
+    <table id="grid"></table>
+    <div class="legend">Green = kasama sa merge · Red = hindi kasama. I-click o i-drag ang mga kahon para pumili. I-click ang pangalan ng row/column para i-toggle ang buo.</div>
+  </div></div>
+</div>
+
+<div class="bar" id="singleBar">
+  <label>Rank <select id="rank"></select></label>
+  <label>Period <select id="days"></select></label>
+</div>
+<div class="bar">
+  <select id="roleSel">
+    <option value="">All roles</option><option>JUNGLE</option><option>ROAM</option><option>EXP</option><option>MID</option><option>GOLD</option>
+  </select>
+  <input id="search" placeholder="Filter hero…">
+  <button class="primary" id="load">Collect</button>
+  <button id="csv">Download CSV</button>
+  <button id="json">Download JSON</button>
+  <span id="status"></span>
+</div>
+<div id="error" class="err" hidden></div>
+
+<div id="drafter" hidden>
+  <h2 class="dsec" style="margin-top:0">Enemy lineup (hanggang 5)</h2>
+  <div class="bar">
+    <input id="enemyIn" list="heroList" placeholder="Mag-type ng enemy hero…" autocomplete="off">
+    <datalist id="heroList"></datalist>
+    <button id="enemyAdd">Add</button>
+    <button id="enemyClear">Clear</button>
+  </div>
+  <div class="bar" id="lineup"></div>
+  <div id="draftOut"></div>
+</div>
+
+<div class="wrap" id="tableWrap">
+  <table>
+    <thead><tr id="pinRow"></tr><tr id="head">
+      <th data-k="rank" rowspan="2">#</th><th data-k="name" rowspan="2">Hero</th><th data-k="role" rowspan="2">Main role</th><th data-k="rank" rowspan="2">Alt roles</th>
+      <th data-k="pick" rowspan="2">Pick rate</th><th data-k="win" rowspan="2">Win rate</th><th data-k="ban" rowspan="2">Ban rate</th>
+      <th data-k="rank" id="ctrHead" colspan="5"></th>
+    </tr><tr id="head2">
+      <th class="rh"><span class="role r-JUNGLE">JUNGLE</span></th><th class="rh"><span class="role r-ROAM">ROAM</span></th><th class="rh"><span class="role r-EXP">EXP</span></th><th class="rh"><span class="role r-MID">MID</span></th><th class="rh"><span class="role r-GOLD">GOLD</span></th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<script>
+const API_BASE = 'https://api.gms.moontontech.com/api/gms/source/2669606/';
+const PERIODS = [['Past 1 day', 2756567], ['Past 3 days', 2756568], ['Past 7 days', 2756569], ['Past 15 days', 2756565], ['Past 30 days', 2756570]];
+const RANKS = [['All', '101'], ['Epic', '5'], ['Legend', '6'], ['Mythic', '7'], ['Honor', '8'], ['Glory', '9']];
+const LABEL = { strong: 'Higher Winrate against', weak: 'Lower Winrate Against' };
+const LISTKEY = { strong: 'strong', weak: 'weak' };
+const ROLE_ORDER = ['JUNGLE', 'ROAM', 'EXP', 'MID', 'GOLD'];
+// [main role, all positions] per hero, from mlbb_heroes_roles.xlsx
+const ROLES = {"Aamon":["JUNGLE","JUNGLE"],"Akai":["ROAM","JUNGLE,ROAM"],"Aldous":["EXP","JUNGLE,EXP"],"Alice":["EXP","JUNGLE,EXP"],"Alpha":["JUNGLE","JUNGLE,EXP"],"Alucard":["JUNGLE","JUNGLE,EXP"],"Angela":["ROAM","ROAM"],"Argus":["EXP","GOLD,EXP"],"Arlott":["EXP","EXP,ROAM"],"Atlas":["ROAM","ROAM"],"Aulus":["JUNGLE","JUNGLE,EXP"],"Aurora":["MID","MID,ROAM"],"Badang":["ROAM","EXP,ROAM"],"Balmond":["EXP","JUNGLE,EXP"],"Bane":["EXP","JUNGLE,EXP"],"Barats":["JUNGLE","JUNGLE"],"Baxia":["JUNGLE","JUNGLE,EXP,ROAM"],"Beatrix":["GOLD","GOLD"],"Belerick":["ROAM","EXP,ROAM"],"Benedetta":["EXP","JUNGLE,EXP"],"Brody":["GOLD","GOLD"],"Bruno":["GOLD","GOLD,JUNGLE"],"Carmilla":["ROAM","ROAM"],"Cecilion":["MID","EXP,MID"],"Chang'e":["MID","MID"],"Chip":["ROAM","ROAM"],"Chou":["EXP","EXP,ROAM"],"Cici":["EXP","EXP"],"Claude":["GOLD","GOLD,JUNGLE"],"Clint":["GOLD","GOLD"],"Cyclops":["MID","JUNGLE,MID"],"Diggie":["ROAM","ROAM"],"Dyrroth":["EXP","JUNGLE,EXP"],"Edith":["EXP","EXP"],"Esmeralda":["EXP","JUNGLE,EXP"],"Estes":["ROAM","ROAM"],"Eudora":["MID","MID"],"Fanny":["JUNGLE","JUNGLE"],"Faramis":["MID","MID,ROAM"],"Floryn":["ROAM","ROAM"],"Franco":["ROAM","ROAM"],"Fredrinn":["JUNGLE","JUNGLE,EXP,ROAM"],"Freya":["JUNGLE","GOLD,JUNGLE,EXP"],"Gatotkaca":["EXP","EXP,ROAM"],"Gloo":["ROAM","EXP,ROAM"],"Gord":["MID","MID"],"Granger":["GOLD","GOLD,JUNGLE"],"Grock":["ROAM","EXP,ROAM"],"Guinevere":["EXP","JUNGLE,EXP,ROAM"],"Gusion":["MID","JUNGLE,EXP,MID"],"Hanabi":["GOLD","GOLD"],"Hanzo":["JUNGLE","JUNGLE"],"Harith":["MID","GOLD,JUNGLE,MID"],"Harley":["JUNGLE","JUNGLE,MID"],"Hayabusa":["JUNGLE","JUNGLE"],"Helcurt":["ROAM","JUNGLE,ROAM"],"Hilda":["ROAM","EXP,ROAM"],"Hirara":["JUNGLE","JUNGLE,EXP"],"Hylos":["ROAM","EXP,ROAM"],"Irithel":["GOLD","GOLD"],"Ixia":["GOLD","GOLD"],"Jawhead":["ROAM","JUNGLE,EXP,ROAM"],"Johnson":["ROAM","ROAM"],"Joy":["JUNGLE","JUNGLE,EXP"],"Julian":["JUNGLE","JUNGLE,EXP"],"Kadita":["MID","MID,ROAM"],"Kagura":["MID","MID"],"Kaja":["ROAM","ROAM"],"Kalea":["ROAM","ROAM"],"Karina":["JUNGLE","JUNGLE"],"Karrie":["GOLD","GOLD"],"Khaleed":["ROAM","EXP,ROAM"],"Khufra":["ROAM","ROAM"],"Kimmy":["MID","GOLD,MID"],"Lancelot":["JUNGLE","JUNGLE"],"Lapu-Lapu":["EXP","EXP"],"Layla":["GOLD","GOLD"],"Leomord":["JUNGLE","JUNGLE,EXP"],"Lesley":["GOLD","GOLD"],"Ling":["JUNGLE","JUNGLE"],"Lolita":["ROAM","ROAM"],"Lukas":["JUNGLE","JUNGLE,EXP"],"Lunox":["MID","GOLD,MID"],"Luo Yi":["MID","MID"],"Lylia":["MID","MID"],"Marcel":["ROAM","ROAM"],"Martis":["JUNGLE","JUNGLE,EXP"],"Masha":["EXP","EXP,ROAM"],"Mathilda":["MID","MID,ROAM"],"Melissa":["GOLD","GOLD"],"Minotaur":["ROAM","ROAM"],"Minsitthar":["EXP","EXP,ROAM"],"Miya":["GOLD","GOLD"],"Moskov":["GOLD","GOLD"],"Nana":["MID","MID"],"Natalia":["ROAM","JUNGLE,ROAM"],"Natan":["GOLD","GOLD,JUNGLE"],"Nolan":["JUNGLE","JUNGLE"],"Novaria":["MID","MID"],"Obsidia":["GOLD","GOLD"],"Odette":["MID","MID"],"Paquito":["EXP","JUNGLE,EXP"],"Pharsa":["MID","MID"],"Phoveus":["EXP","EXP"],"Popol and Kupa":["GOLD","GOLD,JUNGLE"],"Rafaela":["ROAM","ROAM"],"Roger":["JUNGLE","GOLD,JUNGLE"],"Ruby":["EXP","EXP,ROAM"],"Saber":["JUNGLE","JUNGLE,ROAM"],"Selena":["MID","MID,ROAM"],"Silvanna":["ROAM","EXP,MID,ROAM"],"Sora":["EXP","EXP"],"Sun":["EXP","GOLD,JUNGLE,EXP,ROAM"],"Suyou":["JUNGLE","JUNGLE,EXP"],"Terizla":["EXP","EXP"],"Thamuz":["EXP","JUNGLE,EXP"],"Tigreal":["ROAM","ROAM"],"Uranus":["ROAM","ROAM"],"Vale":["MID","MID"],"Valentina":["MID","MID,ROAM"],"Valir":["MID","MID,ROAM"],"Vexana":["MID","MID"],"Wanwan":["GOLD","GOLD"],"X.Borg":["EXP","JUNGLE,EXP"],"Xavier":["MID","MID"],"Yi Sun-shin":["JUNGLE","GOLD,JUNGLE"],"Yin":["JUNGLE","JUNGLE,EXP"],"Yu Zhong":["EXP","EXP"],"Yve":["MID","MID"],"Zetian":["MID","MID,ROAM"],"Zhask":["MID","MID"],"Zhuxin":["MID","MID"],"Zilong":["EXP","EXP"]};
+const normName = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
+const ROLE_IDX = {};
+Object.keys(ROLES).forEach(k => ROLE_IDX[normName(k)] = { main: ROLES[k][0], all: ROLES[k][1].split(',') });
+const roleOf = name => ROLE_IDX[normName(name)] || { main: '', all: [] };
+const roleTag = r => `<span class="role r-${r}">${r}</span>`;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let tab = 'strong';            // strong | weak | multi
+let multiMode = 'strong';      // list shown in the multi toggle tab
+let sortKey = 'win', sortDir = -1;
+let rows = [];                 // merged rows currently displayed
+const cache = {};              // "periodId|rank" -> Promise<records>
+const done = {};               // "periodId|rank" -> Map(heroId -> record), once loaded
+// green/red state; default ON = Mythic, Honor and Glory x all periods (Past 1, 3, 7, 15 and 30 days)
+const on = PERIODS.map((_, p) => RANKS.map((_, r) => r >= 3));
+let gridCollapsed = false, gridTimer = null;   // Multi toggle + Drafter: show the grid for 2s, then fold it away
+const gridTab = () => tab === 'drafter' || tab === 'multi';
+const armGridTimer = () => {
+  clearTimeout(gridTimer);
+  gridTimer = setTimeout(() => { gridTimer = null; if (gridTab()) { gridCollapsed = true; syncUI(); pulse($('gridToggle')); } }, 2000);  // glow = "press me to open it again"
+  $('gridBar').classList.remove('run'); void $('gridBar').offsetWidth;   // restart the countdown bar
+  updateGridCue();
+  setHeadOffset();                                   // the bar's height changes when the Higher / Lower row shows or hides
+};
+const stopGridTimer = () => { clearTimeout(gridTimer); gridTimer = null; updateGridCue(); };
+// every press gives a visible glow, so the user can see that something happened
+function pulse(el) {
+  if (!el) return;
+  el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+  setTimeout(() => el.classList.remove('pulse'), 750);
+}
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b && !b.closest('#grid')) pulse(b); });
+// plain-language hint + countdown bar next to the toggle, so a new user knows what is happening and what to press
+function updateGridCue() {
+  const open = !(gridTab() && gridCollapsed);
+  $('gridHint').textContent = !gridTab() ? '' : !open
+    ? 'Pindutin ang ▾ Ipakita para baguhin ang period at rank.'
+    : gridTimer ? 'Magtatago ito mamaya. Itapat ang mouse sa table para manatiling bukas.' : 'Pindutin ang ▴ Itago kapag tapos ka na.';
+  $('gridBar').classList.toggle('run', open && !!gridTimer);
+}
+
+$('rank').innerHTML = RANKS.map(r => `<option value="${r[1]}">${r[0]}</option>`).join('');
+$('days').innerHTML = PERIODS.map(p => `<option value="${p[1]}">${p[0]}</option>`).join('');
+
+function listMode() { return tab === 'multi' ? multiMode : tab; }
+
+// ---- data ----
+async function load(src, rank) {
+  const body = {
+    pageSize: 200, pageIndex: 1,
+    filters: [{ field: 'bigrank', operator: 'eq', value: rank }, { field: 'match_type', operator: 'eq', value: 0 }], // 0 = what the /rank page itself requests (1 gives a different counter list)
+    sorts: [{ data: { field: 'main_hero_win_rate', order: 'desc' }, type: 'sequence' }],
+    fields: ['main_hero', 'main_hero_appearance_rate', 'main_hero_ban_rate', 'main_hero_win_rate', 'main_heroid',
+      'data.sub_hero.hero', 'data.sub_hero.hero_channel', 'data.sub_hero.increase_win_rate', 'data.sub_hero.heroid']
+  };
+  const res = await fetch(API_BASE + src, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (json.code !== 0) throw new Error(json.message || 'API error');
+  const recs = json.data.records;
+  const names = {}, heads = {};
+  recs.forEach(r => { names[r.data.main_heroid] = r.data.main_hero.data.name; heads[r.data.main_heroid] = r.data.main_hero.data.head; });
+  const conv = list => (list || []).map(s => ({
+    id: s.heroid, name: names[s.heroid] || ('#' + s.heroid),
+    head: (s.hero && s.hero.data && s.hero.data.head) || heads[s.heroid], boost: s.increase_win_rate * 100
+  }));
+  const heroes = recs.map(r => ({
+    id: r.data.main_heroid, name: r.data.main_hero.data.name, head: r.data.main_hero.data.head,
+    pick: r.data.main_hero_appearance_rate * 100, win: r.data.main_hero_win_rate * 100, ban: r.data.main_hero_ban_rate * 100,
+    strong: conv(r.data.sub_hero)
+  }));
+  // Higher Winrate against = the API's sub_hero list.
+  // Lower Winrate Against = the reverse of it: if A has a higher winrate against B, then B has a lower winrate against A.
+  const byId = new Map(heroes.map(h => [h.id, h]));
+  heroes.forEach(h => { h.weak = []; });
+  heroes.forEach(h => h.strong.forEach(c => {
+    const target = byId.get(c.id);
+    if (target) target.weak.push({ id: h.id, name: h.name, head: h.head, boost: c.boost });
+  }));
+  heroes.forEach(h => h.weak.sort((a, b) => b.boost - a.boost));
+  return heroes;
+}
+
+function fetchSet(src, rank) {
+  const key = src + '|' + rank;
+  if (!cache[key]) cache[key] = load(src, rank)
+    .then(recs => { done[key] = new Map(recs.map(h => [h.id, h])); return recs; })
+    .catch(e => { delete cache[key]; throw e; });
+  return cache[key];
+}
+
+// merge any number of record sets into one row per hero
+function combine(sets, mode) {
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const by = new Map();
+  // most appearances first; then biggest effect (most negative first for "worst")
+  const fin = (m, k) => [...m.values()].map(e => ({ id: e.id, name: e.name, head: e.head, boost: e.sum / e.n, n: e.n }))
+    .sort((x, y) => y.n - x.n || y.boost - x.boost);
+  sets.forEach(set => set.forEach(h => {
+    let a = by.get(h.id);
+    if (!a) by.set(h.id, a = { id: h.id, name: h.name, head: h.head, pick: [], win: [], ban: [], lists: { strong: new Map(), weak: new Map() } });
+    a.pick.push(h.pick); a.win.push(h.win); a.ban.push(h.ban);
+    Object.keys(a.lists).forEach(k => h[k].forEach(c => {
+      const e = a.lists[k].get(c.id) || { id: c.id, name: c.name, head: c.head, sum: 0, n: 0 };
+      e.sum += c.boost; e.n++; a.lists[k].set(c.id, e);
+    }));
+  }));
+  return [...by.values()].map(a => ({
+    id: a.id, name: a.name, head: a.head, pick: avg(a.pick), win: avg(a.win), ban: avg(a.ban), cells: sets.length,
+    role: roleOf(a.name).main, pos: roleOf(a.name).all,
+    list: fin(a.lists[LISTKEY[mode]], LISTKEY[mode])
+  }));
+}
+
+function selection() {
+  if (tab !== 'multi' && tab !== 'drafter') return [[+$('days').value, $('rank').value, $('days').selectedOptions[0].text + ' · ' + $('rank').selectedOptions[0].text]];
+  const out = [];
+  PERIODS.forEach((p, i) => RANKS.forEach((r, j) => { if (on[i][j]) out.push([p[1], r[1], p[0] + ' · ' + r[0]]); }));
+  return out;
+}
+
+async function collect() {
+  $('error').hidden = true;
+  const sel = selection();
+  if (!sel.length) { rows = []; $('status').textContent = 'Walang green na cell'; render(); return; }
+  $('status').textContent = 'Loading ' + sel.length + ' set(s)…';
+  try {
+    const sets = await Promise.all(sel.map(s => fetchSet(s[0], s[1])));
+    if (tab === 'drafter') {
+      // merge the green cells, keeping both lists for every hero
+      const hi = combine(sets, 'strong'), lo = new Map(combine(sets, 'weak').map(r => [r.id, r.list]));
+      draftRecs = hi.map(r => ({ id: r.id, name: r.name, head: r.head, strong: r.list, weak: lo.get(r.id) || [] }));
+      $('heroList').innerHTML = draftRecs.map(h => `<option value="${esc(h.name)}">`).join('');
+      $('status').textContent = (sel.length > 1 ? 'Merged ' + sel.length + ' cells · ' : sel[0][2] + ' · ') + draftRecs.length + ' heroes';
+      render();
+      preloadAll(); // fills the hover mini-tables
+      return;
+    }
+    rows = combine(sets, listMode());
+    $('status').textContent = (sel.length > 1 ? 'Merged ' + sel.length + ' cells · ' : sel[0][2] + ' · ') + rows.length + ' heroes';
+    render();
+    preloadAll(); // fills the hover mini-tables
+  } catch (e) {
+    $('error').textContent = 'Failed to collect: ' + e.message;
+    $('error').hidden = false;
+    $('status').textContent = '';
+  }
+}
+
+// ---- view ----
+function view() {
+  const q = $('search').value.trim().toLowerCase();
+  const role = $('roleSel').value;
+  const list = rows.filter(h => h.name.toLowerCase().includes(q) && (!role || h.pos.includes(role)));
+  list.sort((a, b) => typeof a[sortKey] === 'string' ? sortDir * a[sortKey].localeCompare(b[sortKey]) : sortDir * (a[sortKey] - b[sortKey]));
+  return list;
+}
+
+function icons(h, list, mode, multi) {
+  return list.map(c =>
+    `<span class="c tipt" data-h="${h.id}" data-c="${c.id}" data-mode="${mode}" data-name="${esc(c.name)}" data-boost="${c.boost}" data-n="${c.n}" data-cells="${h.cells}">` +
+    `<img src="${esc(c.head)}" alt="${esc(c.name)}" loading="lazy">` +
+    (multi && c.n > 1 ? `<span class="n">${c.n}</span>` : '') + `</span>`).join('');
+}
+
+// ---- drafter: enemy lineup in, counter options (with the reason) out ----
+let lineup = [], draftRecs = [];
+
+function addEnemy(name) {
+  const h = draftRecs.find(x => normName(x.name) === normName(name));
+  if (!h || lineup.includes(h.id) || lineup.length >= 5) return false;
+  lineup.push(h.id);
+  return true;
+}
+
+function renderDrafter() {
+  const byId = new Map(draftRecs.map(h => [h.id, h]));
+  const enemies = lineup.map(id => byId.get(id)).filter(Boolean);
+  // 5 slots; hover a filled slot to list that enemy's Higher / Lower Winrate against
+  $('lineup').innerHTML = Array.from({ length: 5 }, (_, i) => {
+    const e = enemies[i];
+    return e
+      ? `<span class="chip slot tipt" data-slot="${e.id}" data-name="${esc(e.name)}"><img src="${esc(e.head)}" alt="">${esc(e.name)} ${roleOf(e.name).main ? roleTag(roleOf(e.name).main) : ''}<b class="x" data-rm="${e.id}">×</b></span>`
+      : `<span class="slot empty">Slot ${i + 1}</span>`;
+  }).join('');
+  if (!enemies.length) {
+    $('draftOut').innerHTML = '<div class="legend">Mag-type ng enemy hero at i-click ang Add. Itapat ang mouse sa isang slot para makita ang Higher at Lower Winrate against niya.</div>';
+    return;
+  }
+
+  // value of candidate c against enemy E: + if c is in E's Lower Winrate list (c has the higher winrate against E, so c counters E),
+  // - if c is in E's Higher Winrate list (E has the higher winrate against c, so avoid c)
+  const cand = new Map();
+  const add = (c, E) => {
+    if (lineup.includes(c.id)) return;
+    let o = cand.get(c.id);
+    if (!o) cand.set(c.id, o = { id: c.id, name: c.name, head: c.head, score: 0, good: 0, bad: 0, vs: new Map() });
+    o.score += c.boost; c.boost > 0 ? o.good++ : o.bad++; o.vs.set(E.id, c.boost);
+  };
+  enemies.forEach(E => {
+    const hit = new Set(E.weak.map(c => c.id));
+    E.weak.forEach(c => add(c, E));
+    E.strong.forEach(c => { if (!hit.has(c.id)) add({ ...c, boost: -c.boost }, E); });
+  });
+
+  const q = $('search').value.trim().toLowerCase(), role = $('roleSel').value;
+  const keep = o => o.name.toLowerCase().includes(q) && (!role || roleOf(o.name).all.includes(role));
+  const options = [...cand.values()].filter(o => o.good > 0 && keep(o)).sort((a, b) => b.score - a.score || b.good - a.good);
+  const avoid = [...cand.values()].filter(o => o.good === 0 && keep(o)).sort((a, b) => a.score - b.score);
+
+  const sgn = v => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  const row = o => {
+    const r = roleOf(o.name);
+    const good = enemies.filter(E => o.vs.get(E.id) > 0).map(E => `${E.name} (${sgn(o.vs.get(E.id))})`);
+    const bad = enemies.filter(E => o.vs.get(E.id) < 0).map(E => `${E.name} (${sgn(o.vs.get(E.id))})`);
+    const why = (good.length ? 'Win Rate Increase vs ' + good.join(', ') : '') + (good.length && bad.length ? ' · ' : '') + (bad.length ? 'Win Rate Decrease vs ' + bad.join(', ') : '');
+    const chips = enemies.map(E => {
+      const v = o.vs.get(E.id);
+      // hover card: where (period x rank) this hero counters / loses to that enemy
+      const hover = `data-h="${E.id}" data-c="${o.id}" data-name="${esc(o.name)}" data-en="${esc(E.name)}" data-mode="${v != null && v < 0 ? 'strong' : 'weak'}"` + (v != null ? ` data-boost="${v}"` : '');
+      if (v == null) return `<span class="w none tipt" ${hover}><img src="${esc(E.head)}" alt=""><i>—</i></span>`;
+      return `<span class="w ${v > 0 ? 'good' : 'bad'} tipt" ${hover}><img src="${esc(E.head)}" alt=""><i>${sgn(v)}</i></span>`;
+    }).join('');
+    return `<div class="dcard"><div class="dtop tipt" data-lists="1" data-c="${o.id}" data-name="${esc(o.name)}"><img src="${esc(o.head)}" alt=""><b>${esc(o.name)}</b>` +
+      `<span class="dcnt">${o.good}/${enemies.length}</span><span class="dtot ${o.score >= 0 ? 'good' : 'bad'}">${sgn(o.score)}</span></div>` +
+      `<div class="dchips">${chips}</div><div class="why-t">${esc(why)}</div></div>`;
+  };
+  // one column per role (main role): JUNGLE | ROAM | EXP | MID | GOLD
+  const table = list => `<div class="board">${ROLE_ORDER.map(rl => {
+    const items = list.filter(o => roleOf(o.name).main === rl);
+    return `<div class="rcol"><div class="rhead">${roleTag(rl)}<span>${items.length}</span></div>${items.map(row).join('') || '<div class="rempty">—</div>'}</div>`;
+  }).join('')}</div>`;
+
+  $('draftOut').innerHTML =
+    `<h2 class="dsec">Options na kaya mag-counter (${options.length})</h2>` + (options.length ? table(options) : '<div class="legend">Walang option na tumugma sa filter.</div>') +
+    (avoid.length ? `<h2 class="dsec">Iwasan (talo laban sa lineup) (${avoid.length})</h2>` + table(avoid) : '') +
+    `<div class="legend">Green = counter ng enemy na iyon · Red = mahina laban sa enemy na iyon · Gray = walang data ang matchup na iyon. Ang Total ay ang kabuuan ng win-rate swing mula sa Higher Winrate against at Lower Winrate Against ng bawat enemy.</div>`;
+}
+
+// show/hide the panels for the current tab (runs right away, without waiting for data)
+function syncUI() {
+  const drafting = tab === 'drafter';
+  $('drafter').hidden = !drafting;
+  $('tableWrap').hidden = drafting;
+  $('multi').hidden = tab !== 'multi' && !drafting;   // the same green/red grid picks the data for Multi toggle and Drafter
+  $('subBar').hidden = tab !== 'multi';              // the Higher / Lower switch of the Multi toggle lives in the sticky bar
+  $('gridToggle').hidden = !gridTab();
+  const folded = gridTab() && gridCollapsed;
+  $('gridBody').classList.toggle('collapsed', folded);
+  $('gridBody').inert = folded;                      // a folded table can't be tabbed into
+  $('gridToggle').textContent = (gridCollapsed ? '▾ Ipakita' : '▴ Itago') + ' ang period at rank (' + on.flat().filter(Boolean).length + ' ON)';
+  updateGridCue();
+  $('singleBar').hidden = tab === 'multi' || drafting;
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === tab));
+}
+
+// second header row sticks right under the first one
+function setHeadOffset() {
+  document.documentElement.style.setProperty('--h1', $('head').getBoundingClientRect().height + 'px');
+  // height of the sticky tab bar: the table header sticks right below it
+  document.documentElement.style.setProperty('--tb', $('topBar').getBoundingClientRect().height + 'px');
+  // total height of the sticky header block, so a "jump to hero" lands just below it
+  document.documentElement.style.setProperty('--th', document.querySelector('#tableWrap thead').getBoundingClientRect().height + 'px');
+}
+window.addEventListener('resize', setHeadOffset);
+
+// ---- pinned row above the header: copies the stats of whichever hero is hovered, fading in and out ----
+// Hover a hero row -> that hero. Hover an icon inside a role column -> THAT icon's hero (even if it is a different row).
+let pinToken = 0, pinKey = null;
+function pinBlank() {
+  pinToken++; pinKey = null;
+  $('pinRow').classList.remove('show');
+  $('pinRow').innerHTML = '<td></td>'.repeat(12);
+}
+function pinShow(id) {
+  const h = rows.find(r => r.id === id);
+  if (!h) return;
+  const token = ++pinToken;
+  pinKey = id;
+  const num = view().findIndex(r => r.id === id) + 1;   // its position in the current table (0 -> filtered out)
+  const tmp = document.createElement('table');
+  tmp.innerHTML = '<tbody><tr>' + rowCells(h, num || '—', rows[0].cells > 1) + '</tr></tbody>';
+  const cells = [...tmp.querySelectorAll('td')];
+  $('pinRow').classList.remove('show');             // fade the old hero out ...
+  setTimeout(() => {
+    if (token !== pinToken) return;                 // ... mouse already moved on
+    $('pinRow').innerHTML = cells.map(td =>
+      `<td class="${td.className.replace('tipt', '').trim()}"><div class="pinc"><div class="pinw">${td.innerHTML}</div></div></td>`).join('');
+    void $('pinRow').offsetWidth;                   // so the new cells can fade in
+    $('pinRow').classList.add('show');
+    pinScroll();
+  }, 110);
+}
+// a cell with more content than fits in the pinned row slowly scrolls down, pauses, then back up (and repeats)
+function pinScroll(root = $('pinRow'), sel = '.pinc', SPEED = 14) {   // SPEED = px per second
+  const PAUSE = 1200;                                // ms to rest at each end
+  root.querySelectorAll(sel).forEach(box => {
+    const inner = box.firstElementChild;
+    const over = inner.offsetHeight - box.clientHeight;
+    if (over <= 1) return;                           // fits in one row: stay still
+    const move = over / SPEED * 1000, total = 2 * move + 2 * PAUSE;
+    const t1 = PAUSE / total, t2 = (PAUSE + move) / total, t3 = (2 * PAUSE + move) / total;
+    inner.animate([
+      { transform: 'translateY(0)' },
+      { transform: 'translateY(0)', offset: t1 },
+      { transform: `translateY(-${over}px)`, offset: t2 },
+      { transform: `translateY(-${over}px)`, offset: t3 },
+      { transform: 'translateY(0)' }
+    ], { duration: total, iterations: Infinity, easing: 'linear' });
+  });
+}
+function pinHide() { pinToken++; pinKey = null; $('pinRow').classList.remove('show'); }
+$('rows').addEventListener('mouseover', e => {
+  const tr = e.target.closest('tr');
+  if (!tr) return;
+  const icon = e.target.closest('.c');
+  const id = icon ? +icon.dataset.c : +tr.dataset.id;
+  if (id !== pinKey) pinShow(id);
+});
+$('rows').addEventListener('mouseleave', pinHide);
+
+// click an icon -> jump to that hero's row in the table
+function jumpTo(id) {
+  let tr = $('rows').querySelector(`tr[data-id="${id}"]`);
+  if (!tr) {                                       // hidden by the search / role filter: clear them so the hero shows up
+    $('search').value = ''; $('roleSel').value = '';
+    render();
+    tr = $('rows').querySelector(`tr[data-id="${id}"]`);
+  }
+  if (!tr) return;
+  tr.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  tr.classList.remove('flash'); void tr.offsetWidth; tr.classList.add('flash');
+}
+const jumpOnClick = e => { const icon = e.target.closest('.c'); if (icon) jumpTo(+icon.dataset.c); };
+$('rows').addEventListener('click', jumpOnClick);
+$('pinRow').addEventListener('click', jumpOnClick);
+
+// the last column, split into 5 columns: JUNGLE | ROAM | EXP | MID | GOLD (by main role)
+function roleCells(h, list, multi) {
+  return ROLE_ORDER.map(rl => {
+    const items = list.filter(c => roleOf(c.name).main === rl);
+    return `<td class="ctr rcell">${icons(h, items, '', multi) || '<span style="color:var(--muted)">—</span>'}</td>`;
+  }).join('');
+}
+
+// the 12 cells of one hero row (also used for the pinned row)
+function rowCells(h, num, multi) {
+  return `<td>${num}</td><td class="hero tipt" data-c="${h.id}" data-name="${esc(h.name)}"><div class="hw"><img src="${esc(h.head)}" alt="" loading="lazy">${esc(h.name)}</div></td>` +
+    `<td class="rolec">${h.role ? roleTag(h.role) : ''}</td>` +
+    `<td class="rolec"><span class="pos">${h.pos.filter(p => p !== h.role).map(roleTag).join('') || '<span style="color:var(--muted)">—</span>'}</span></td>` +
+    `<td>${h.pick.toFixed(2)}%</td><td>${h.win.toFixed(2)}%</td><td>${h.ban.toFixed(2)}%</td>` +
+    roleCells(h, h.list, multi);
+}
+
+function render() {
+  syncUI();
+  if (tab === 'drafter') { renderDrafter(); return; }
+  const multi = rows.length && rows[0].cells > 1;
+  pinBlank();
+  $('rows').innerHTML = view().map((h, i) => `<tr data-id="${h.id}">${rowCells(h, i + 1, multi)}</tr>`).join('');
+  document.querySelectorAll('#head th').forEach(th => th.classList.toggle('sorted', th.dataset.k === sortKey));
+  setHeadOffset();
+  $('ctrHead').textContent = LABEL[listMode()] + (listMode() === 'strong' ? ' (counters these)' : ' (countered by)');
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.m === tab));
+  document.querySelectorAll('.sub-tab').forEach(t => t.classList.toggle('active', t.dataset.s === multiMode));
+}
+
+function drawGrid() {
+  $('grid').innerHTML =
+    '<tr><th></th>' + RANKS.map((r, j) => `<th data-col="${j}">${r[0]}</th>`).join('') + '</tr>' +
+    PERIODS.map((p, i) => `<tr><th data-row="${i}">${p[0]}</th>` +
+      RANKS.map((r, j) => `<td><button class="${on[i][j] ? 'on' : 'off'}" data-i="${i}" data-j="${j}">${on[i][j] ? 'ON' : 'OFF'}</button></td>`).join('') + '</tr>').join('');
+}
+
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+
+// ---- events ----
+document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+  tab = t.dataset.m;
+  if (gridTab()) { gridCollapsed = false; armGridTimer(); } else stopGridTimer();
+  syncUI();
+  if (gridTab()) pulse($('gridToggle'));          // point at the new button the moment it appears
+  collect();
+});
+$('gridToggle').onclick = () => { stopGridTimer(); gridCollapsed = !gridCollapsed; syncUI(); };
+// mouse over the table = "I'm still using it": keep it open; leave = fold after 2s again
+$('gridBody').addEventListener('mouseenter', () => { if (gridTab() && !gridCollapsed) stopGridTimer(); });
+$('gridBody').addEventListener('mouseleave', () => { if (gridTab() && !gridCollapsed && paint === null) armGridTimer(); });
+document.querySelectorAll('.sub-tab').forEach(t => t.onclick = () => { multiMode = t.dataset.s; collect(); });
+
+// press a cell and drag to draw a box: every cell inside becomes ON or OFF together
+let paint = null, start = null, before = null;
+function paintBox(end) {
+  const i1 = Math.min(start[0], end[0]), i2 = Math.max(start[0], end[0]);
+  const j1 = Math.min(start[1], end[1]), j2 = Math.max(start[1], end[1]);
+  document.querySelectorAll('#grid button').forEach(b => {
+    const i = +b.dataset.i, j = +b.dataset.j;
+    const v = (i >= i1 && i <= i2 && j >= j1 && j <= j2) ? paint : before[i][j];
+    on[i][j] = v; b.className = v ? 'on' : 'off'; b.textContent = v ? 'ON' : 'OFF';
+    b.classList.toggle('boxed', i >= i1 && i <= i2 && j >= j1 && j <= j2);
+  });
+}
+$('grid').addEventListener('pointerdown', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  stopGridTimer(); // don't fold the grid while it is being edited
+  if (b.hasPointerCapture && b.hasPointerCapture(e.pointerId)) b.releasePointerCapture(e.pointerId);
+  start = [+b.dataset.i, +b.dataset.j];
+  before = on.map(r => r.slice());
+  paint = !on[start[0]][start[1]];
+  paintBox(start);
+  e.preventDefault();
+});
+document.addEventListener('pointermove', e => {
+  if (paint === null) return;
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const b = el && el.closest && el.closest('#grid button');
+  if (b) paintBox([+b.dataset.i, +b.dataset.j]);
+});
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => {
+  if (paint === null) return;
+  paint = null;
+  document.querySelectorAll('#grid button.boxed').forEach(b => b.classList.remove('boxed'));
+  document.querySelectorAll('#grid button').forEach(b => { if (on[+b.dataset.i][+b.dataset.j] !== before[+b.dataset.i][+b.dataset.j]) pulse(b); }); // glow the cells that just changed
+  collect();
+  if (gridTab()) armGridTimer();
+}));
+
+$('grid').onclick = e => {
+  const b = e.target.closest('button'), th = e.target.closest('th');
+  if (b) { if (e.detail !== 0) return; const i = +b.dataset.i, j = +b.dataset.j; on[i][j] = !on[i][j]; } // keyboard only; mouse/touch handled above
+  else if (th && th.dataset.row != null) { const i = +th.dataset.row, v = !on[i].every(Boolean); on[i] = on[i].map(() => v); }
+  else if (th && th.dataset.col != null) { const j = +th.dataset.col, v = !on.every(r => r[j]); on.forEach(r => r[j] = v); }
+  else return;
+  drawGrid(); collect();
+  if (gridTab()) armGridTimer();
+};
+
+document.querySelectorAll('#head th').forEach(th => th.onclick = () => {
+  const k = th.dataset.k; if (k === 'rank') return;
+  sortDir = sortKey === k ? -sortDir : (k === 'name' ? 1 : -1); sortKey = k; render();
+});
+$('load').onclick = collect;
+const takeEnemy = () => { if (addEnemy($('enemyIn').value)) { $('enemyIn').value = ''; renderDrafter(); } };
+$('enemyAdd').onclick = takeEnemy;
+$('enemyIn').oninput = () => { if (draftRecs.some(h => normName(h.name) === normName($('enemyIn').value))) takeEnemy(); };
+$('enemyIn').onkeydown = e => { if (e.key === 'Enter') takeEnemy(); };
+$('enemyClear').onclick = () => { lineup = []; renderDrafter(); };
+$('lineup').onclick = e => { const x = e.target.closest('[data-rm]'); if (x) { lineup = lineup.filter(id => id !== +x.dataset.rm); renderDrafter(); } };
+$('rank').onchange = collect;
+$('days').onchange = collect;
+$('search').oninput = render;
+$('roleSel').onchange = render;
+$('json').onclick = () => download('mlbb-rank.json', JSON.stringify(view(), null, 2), 'application/json');
+$('csv').onclick = () => download('mlbb-rank.csv',
+  'rank,hero,main_role,positions,pick_rate,win_rate,ban_rate,' + (listMode() === 'strong' ? 'higher_winrate_against' : 'lower_winrate_against') + '\n' +
+  view().map((h, i) => [i + 1, '"' + h.name + '"', h.role, '"' + h.pos.join('/') + '"', h.pick.toFixed(2), h.win.toFixed(2), h.ban.toFixed(2),
+    ...[h.list].map(l => '"' + l.map(c => c.name + ' (' + c.boost.toFixed(2) + '%' + (h.cells > 1 ? ', ' + c.n + '/' + h.cells : '') + ')').join('; ') + '"')].join(',')).join('\n'), 'text/csv');
+
+// ---- hover card: main role + mini table of where the hero appears (green) or not (red) ----
+let preloading = false;
+async function preloadAll() {
+  if (preloading) return;
+  preloading = true;
+  const jobs = [];
+  PERIODS.forEach(p => RANKS.forEach(r => jobs.push([p[1], r[1]])));
+  for (let i = 0; i < jobs.length; i += 6) await Promise.allSettled(jobs.slice(i, i + 6).map(j => fetchSet(j[0], j[1])));
+  preloading = false;
+  if (tipEl.style.display === 'block' && tipSrc) fillTip(tipSrc);
+}
+
+const tipEl = document.createElement('div');
+tipEl.id = 'tip';
+document.body.appendChild(tipEl);
+let tipSrc = null;
+const short = p => p[0].replace('Past ', '').replace(/ days?/, 'd');
+const RSHORT = ['All', 'Epic', 'Leg', 'Myt', 'Hon', 'Glo'];
+
+// hover card for a lineup slot or an Options / Iwasan hero: roles + everything that hero is Higher / Lower against,
+// taken from the cells currently toggled ON
+function fillSlotTip(el) {
+  const E = draftRecs.find(h => h.id === +(el.dataset.slot || el.dataset.c));
+  if (!E) return;
+  tipEl.classList.add('wide');
+  const r = roleOf(E.name), others = r.all.filter(p => p !== r.main), cells = on.flat().filter(Boolean).length;
+  const pct = v => (v > 0 ? '+' : '') + v.toFixed(2) + '%';
+  // E.strong: E has the higher winrate against these (+). E.weak: these have the higher winrate against E, so E's winrate drops (-).
+  // 5 columns by main role; icon first, with a small name and a small +/-% (and n/cells) beside it
+  const cols = (list, sign, cls) => `<div class="tcols">${ROLE_ORDER.map(rl => {
+    const items = list.filter(c => roleOf(c.name).main === rl);
+    return `<div class="tcol"><div class="trh">${roleTag(rl)}<i>${items.length}</i></div>` +
+      (items.map(c => `<div class="ti ${cls}"><img src="${esc(c.head)}" alt=""><span><b>${esc(c.name)}</b><em>${pct(sign * c.boost)}${cells > 1 ? ' · ' + c.n + '/' + cells : ''}</em></span></div>`).join('') || '<div class="tnone">—</div>') + `</div>`;
+  }).join('')}</div>`;
+  tipEl.innerHTML =
+    `<div class="th"><b>${esc(E.name)}</b></div>` +
+    `<div class="pos"><span class="lbl">Main role</span>${r.main ? roleTag(r.main) : '—'}</div>` +
+    `<div class="pos"><span class="lbl">Alt roles</span>${others.length ? others.map(roleTag).join('') : '—'}</div>` +
+    `<div class="cap">${esc(E.name)} Higher Winrate against: (${E.strong.length})</div><div class="tscroll"><div class="tin">${cols(E.strong, 1, 'good')}</div></div>` +
+    `<div class="cap">${esc(E.name)} Lower Winrate Against: (${E.weak.length})</div><div class="tscroll"><div class="tin">${cols(E.weak, -1, 'bad')}</div></div>` +
+    // which toggle filter these lists come from
+    `<div class="cap">Batay sa ${cells === 1 ? esc(selection()[0][2]) : cells + ' cells na naka-ON'}` + (cells > 1 ? ` · average · n/${cells} = ilang cell lumabas` : '') + `</div>`;
+  pinScroll(tipEl, '.tscroll', 40);                  // a very long list scrolls by itself instead of running off the screen
+}
+
+function fillTip(el) {
+  if (el.dataset.slot || el.dataset.lists) { fillSlotTip(el); return; }
+  tipEl.classList.remove('wide');
+  const d = el.dataset, r = roleOf(d.name), mode = d.mode || LISTKEY[listMode()];
+  let html = `<div class="th"><b>${esc(d.name)}</b></div>`;
+  const others = r.all.filter(p => p !== r.main);
+  html += `<div class="pos"><span class="lbl">Main role</span>${r.main ? roleTag(r.main) : '—'}</div>` +
+    `<div class="pos"><span class="lbl">Alt roles</span>${others.length ? others.map(roleTag).join('') : '—'}</div>`;
+  if (d.boost) {
+    const b = parseFloat(d.boost), cells = +d.cells;
+    html += `<div class="bst">${b >= 0 ? '+' : ''}${b.toFixed(2)}% win rate` + (cells > 1 ? ` (avg) · in ${d.n}/${cells} selected cells` : '') + `</div>`;
+  }
+  if (d.h) {
+    let seen = 0, total = 0;
+    const body = PERIODS.map(p => '<tr><td class="rl">' + short(p) + '</td>' + RANKS.map(rk => {
+      const m = done[p[1] + '|' + rk[1]];
+      if (!m) return '<td class="m u"></td>';
+      const rec = m.get(+d.h), hit = !!(rec && rec[mode].some(x => x.id === +d.c));
+      total++; if (hit) seen++;
+      return `<td class="m ${hit ? 'y' : 'n'}"></td>`;
+    }).join('') + '</tr>').join('');
+    const head = '<tr><td></td>' + RSHORT.map(x => `<th>${x}</th>`).join('') + '</tr>';
+    const cap = d.en
+      ? `${esc(d.name)} vs ${esc(d.en)} · ${mode === 'weak' ? 'kaya niyang i-counter si ' + esc(d.en) : 'natatalo siya kay ' + esc(d.en)} sa ${seen}/${PERIODS.length * RANKS.length} cells`
+      : `${esc(LABEL[mode])} · appears in ${seen}/${PERIODS.length * RANKS.length}`;
+    html += `<div class="cap">${cap}` + (total < 30 ? ' (loading…)' : '') + `</div><table>${head}${body}</table>`;
+  }
+  tipEl.innerHTML = html;
+}
+
+function placeTip(e) {
+  const w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  let x = e.clientX + 16, y = e.clientY + 16;
+  if (x + w > innerWidth - 8) x = Math.max(8, e.clientX - w - 16);
+  if (y + h > innerHeight - 8) y = Math.max(8, innerHeight - h - 8);
+  tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
+}
+
+['rows', 'draftOut', 'lineup'].forEach(id => {
+  $(id).addEventListener('mousemove', e => {
+    const el = e.target.closest('.tipt');
+    if (!el) { tipEl.style.display = 'none'; tipSrc = null; return; }
+    if (el !== tipSrc) { tipSrc = el; tipEl.style.display = 'block'; fillTip(el); }   // visible first, so heights can be measured
+    tipEl.style.display = 'block';
+    placeTip(e);
+  });
+  $(id).addEventListener('mouseleave', () => { tipEl.style.display = 'none'; tipSrc = null; });
+});
+
+drawGrid();
+collect();
+</script>
+</body>
+</html>
